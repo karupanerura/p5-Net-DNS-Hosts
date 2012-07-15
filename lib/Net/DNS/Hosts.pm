@@ -71,7 +71,7 @@ This document describes Net::DNS::Hosts version 0.01.
 =head1 SYNOPSIS
 
     use Net::DNS::Hosts (
-        'www.google.co.jp' => '127.0.0.1'
+        'www.cpan.org' => '127.0.0.1'
     );
     use LWP::UserAgent;
 
