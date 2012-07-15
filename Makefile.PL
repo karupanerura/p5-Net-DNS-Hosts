@@ -27,7 +27,7 @@ use inc::Module::Install;
 all_from 'lib/Net/DNS/Hosts.pm';
 
 requires 'Socket';
-requires 'Guard';
+requires 'B::Hooks::EndOfScope';
 
 test_requires 'Test::More'     => '0.88';
 test_requires 'Test::Requires' => '0.06';
