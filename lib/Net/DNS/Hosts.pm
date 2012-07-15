@@ -18,7 +18,7 @@ sub import {
     $class->register_host(@_);
     $class->enable_override;
     on_scope_end {
-        $class->hosts;
+        $class->reset_hosts;
         $class->disable_override;
     };
 }
