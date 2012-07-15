@@ -7,33 +7,49 @@ use utf8;
 our $VERSION = '0.01';
 
 use Socket ();
-use B::Hooks::EndOfScope;
-
-our $SUPER_inet_aton = *Socket::inet_aton{CODE};
 
 sub import {
     my $class = shift;
-    return unless @_;
-
-    $class->register_host(@_);
-    $class->enable_override;
-    on_scope_end {
-        $class->reset_hosts;
-        $class->disable_override;
-    };
+    $class->set_super_inet_aton( *Socket::inet_aton{CODE} );
+    $class->disable_override;
+    {
+        no warnings 'redefine';
+        *Socket::inet_aton = sub {
+            $class->inet_aton->(@_);
+        };
+    }
 }
+
+my $SUPER_inet_aton;
+sub set_super_inet_aton { $SUPER_inet_aton = $_[1] };
+sub super_inet_aton     { $SUPER_inet_aton };
+
+my $inet_aton;
+sub set_inet_aton { $inet_aton = $_[1] };
+sub inet_aton     { $inet_aton };
 
 my %HOSTS;
 sub reset_hosts {  %HOSTS = () }
 sub hosts       { \%HOSTS }
+
+sub scope {
+    my $class = shift;
+
+    $class->reset_hosts;
+    $class->register_host(@_);
+    $class->enable_override;
+    return Net::DNS::Hosts::Guard->new(sub {
+        $class->reset_hosts;
+        $class->disable_override;
+    });
+}
 
 sub register_host {
     my $class = shift;
     my %hosts = @_;
 
     for my $host (keys %hosts) {
-        my $peer_addr = $hosts{$host};
-        $class->hosts->{$host} = $SUPER_inet_aton->($peer_addr);
+        $class->hosts->{$host} = $class->super_inet_aton->($hosts{$host});
     }
 }
 
@@ -46,15 +62,42 @@ sub registered_peer_addr {
 
 sub enable_override {
     my $class = shift;
-    no warnings 'redefine';
-    *Socket::inet_aton = sub {
-        return $class->registered_peer_addr(@_) || $SUPER_inet_aton->(@_);
-    };
+    $class->set_inet_aton(
+        sub {
+            return $class->registered_peer_addr(@_) || $class->super_inet_aton->(@_);
+        }
+    );
 }
 
 sub disable_override {
-    no warnings 'redefine';
-    *Socket::inet_aton = $SUPER_inet_aton;
+    my $class = shift;
+    $class->set_inet_aton(
+        sub {
+            return $class->super_inet_aton->(@_);
+        }
+    );
+}
+
+package # for no index
+    Net::DNS::Hosts::Guard;
+use strict;
+use warnings;
+use utf8;
+
+sub new {
+    my($class, $code) = @_;
+
+    return bless +{
+        code => $code
+    } => $class;
+}
+
+sub fire {
+    shift->{code}->();
+}
+
+sub DESTROY {
+    shift->fire();
 }
 
 1;
@@ -70,10 +113,12 @@ This document describes Net::DNS::Hosts version 0.01.
 
 =head1 SYNOPSIS
 
-    use Net::DNS::Hosts (
+    use Net::DNS::Hosts;
+    use LWP::UserAgent;
+
+    my $scope = Net::DNS::Hosts->scope(
         'www.cpan.org' => '127.0.0.1'
     );
-    use LWP::UserAgent;
 
     # override request hosts with peer addr defined above
     my $ua  = LWP::UserAgent->new;

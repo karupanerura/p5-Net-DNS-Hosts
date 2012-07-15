@@ -3,9 +3,7 @@ use strict;
 use warnings;
 use utf8;
 
-use Net::DNS::Hosts (
-    'www.example.yyy.xxx' => '127.0.0.1'
-);
+use Net::DNS::Hosts;
 
 use Test::More;
 use Test::TCP;
@@ -35,6 +33,10 @@ my $server = Test::TCP->new(
 
         $s->close;
     },
+);
+
+my $guard = Net::DNS::Hosts->scope(
+    'www.example.yyy.xxx' => '127.0.0.1'
 );
 
 my $c = IO::Socket::INET->new(
